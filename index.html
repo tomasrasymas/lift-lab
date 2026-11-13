@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LiftLab — RC Flight Simulator</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M2 18 L30 10 L22 16 L30 22 Z' fill='%23ffb000'/></svg>" />
+    <style>
+      html, body { margin: 0; height: 100%; background: #0d1117; overflow: hidden; }
+      #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: radial-gradient(circle at 50% 40%, #1d2a3d, #0b0f15); color: #e8eef6; font-family: system-ui, sans-serif; z-index: 100; }
+      .ld-brand { font-size: 42px; font-weight: 800; letter-spacing: 1px; }
+      .ld-sub { opacity: 0.6; margin-top: 8px; }
+    </style>
+  </head>
+  <body>
+    <div id="loading">
+      <div class="ld-brand">LiftLab</div>
+      <div class="ld-sub">Generating terrain…</div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
