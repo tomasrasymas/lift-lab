@@ -44,13 +44,13 @@ A switch channel only becomes active the first time it reaches an end position, 
 |---|---|---|
 | **Trainer 1400**: high wing, tricycle gear | Basics, takeoff and landing, gentle stall | Manual / Gyro / Self-level |
 | **FPV 5" Freestyle** | Acro flying, Betaflight "Actual" rates | Acro / Angle / Horizon |
-| **Camera Drone** | GPS hold, flying with wind drift (ATTI) | GPS / ATTI / Manual |
 
 ## Locations
 
 Change the location in **Menu → Fly → Location**.
 
 - **Airfield:** RC club field with an asphalt runway, mown grass, race gates and a lake.
+- **Obstacle course:** the airfield's flat ground with practice obstacles for quads: walls with windows that get smaller, a wall slalom, a dive tower, and straight, bent and raised tunnels.
 - **Forest:** hills with dense pines and broadleaf trees, a grass strip in a clearing, dirt trails, a river ravine, boulders, fallen logs and a wooden hunting tower.
 - **City:** about 1.4 km of street grid:
   - glass and office towers downtown, brick and concrete blocks, low-rise outskirts
@@ -64,7 +64,7 @@ Change the location in **Menu → Fly → Location**.
 - **Lens:** a wide-angle lens with fisheye distortion, chromatic aberration and vignette, with your own props blurring in the top corners.
 - **Video:** choose **HD digital** (clean picture; macroblocking and frozen frames when the signal drops) or **Analog 5.8 GHz** (noise, scanlines, colour bleed and breakup).
 - **Video signal:** quality depends on distance and on obstruction by buildings, trees and terrain between you and the aircraft. Fly behind a tower and the picture breaks up.
-- **OSD:** a Betaflight-style display shows voltage, mAh, link quality, mode, speed, altitude, distance home, timer, throttle and a horizon line. The camera drone uses a stabilised gimbal view with a DJI-style display.
+- **OSD:** a Betaflight-style display shows voltage, mAh, link quality, mode, speed, altitude, distance home, timer, throttle and a horizon line.
 
 ## Physics
 
@@ -77,8 +77,7 @@ Change the location in **Menu → Fly → Location**.
 - **Multirotor:**
   - Each motor has spool-up and spool-down lag, thrust and torque, plus inflow losses, translational lift, ground effect, vortex ring state and propwash wobble.
   - A Betaflight-style rate PID drives an airmode mixer.
-  - The camera drone has GPS position hold and ATTI altitude hold.
-- **LiPo battery:** open-circuit voltage curve, sag from internal resistance, capacity drain and ESC low-voltage cutoff. Flight times are realistic: about 10 min for the trainer and 5" quad, about 20 min for the camera drone. You can turn drain off in Settings.
+- **LiPo battery:** open-circuit voltage curve, sag from internal resistance, capacity drain and ESC low-voltage cutoff. Flight times are realistic: about 10 min for the trainer and 5" quad. You can turn drain off in Settings.
 - **Environment:** wind with a height profile, gusts and turbulence. Spring/damper landing gear has wheel friction (asphalt vs grass) and nose/tail wheel steering.
 - **Collisions:** physical bounces off posts and buildings. Trees can catch the aircraft. Hard impacts, as well as tree and lake strikes, count as crashes.
 

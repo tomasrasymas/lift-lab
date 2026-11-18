@@ -86,8 +86,9 @@ export const FPV_QUAD: QuadConfig = {
   arm: 0.08,
   motorThrust: 15,
   motorTau: 0.025,
-  idle: 0.055,
+  idle: 0.09,
   kQ: 0.016,
+  rotorInertia: 7e-6,
   propDiameter: 0.127,
   pitchSpeed: 48,
   cda: [0.012, 0.022, 0.009],
@@ -96,50 +97,19 @@ export const FPV_QUAD: QuadConfig = {
   rates: { center: 70, max: 670, expo: 0.54 },
   yawRates: { center: 70, max: 500, expo: 0.4 },
   maxAngle: 55,
-  pid: { kp: 32, ki: 45, kpYaw: 20, kiYaw: 30, angle: 7 },
+  pid: { kp: 24, ki: 45, kpYaw: 20, kiYaw: 30, angle: 7 },
   maxSpeed: 0,
   fpvCam: [0, 0.018, -0.06],
   camTilt: 25,
-  battery: { cells: 6, capacity: 1300, rInt: 0.07 },
+  battery: { cells: 6, capacity: 1300, rInt: 0.045 },
   motorPower: 480,
   maxRpm: 26000,
   blades: 3,
 };
 
-export const CAMERA_DRONE: QuadConfig = {
-  id: 'drone',
-  name: 'Camera Drone',
-  description: 'GPS camera drone like a DJI. GPS mode holds position when you let go; ATTI drifts with the wind; MANUAL is angle mode without altitude hold.',
-  type: 'gps',
-  mass: 0.9,
-  inertia: [0.006, 0.011, 0.0055],
-  arm: 0.12,
-  motorThrust: 6,
-  motorTau: 0.06,
-  idle: 0.1,
-  kQ: 0.02,
-  propDiameter: 0.2,
-  pitchSpeed: 30,
-  cda: [0.02, 0.04, 0.016],
-  hForce: 0.03,
-  contacts: quadContacts(0.12, -0.085, 0.07, 3000, 40),
-  rates: { center: 60, max: 200, expo: 0.3 },
-  yawRates: { center: 50, max: 120, expo: 0.2 },
-  maxAngle: 28,
-  pid: { kp: 14, ki: 18, kpYaw: 9, kiYaw: 10, angle: 5 },
-  maxSpeed: 14,
-  fpvCam: [0, -0.06, -0.09],
-  camTilt: -12,
-  battery: { cells: 4, capacity: 2500, rInt: 0.06 },
-  motorPower: 95,
-  maxRpm: 9000,
-  blades: 2,
-};
-
 export const AIRCRAFT_LIST = [
   { id: 'trainer', label: TRAINER.name, desc: TRAINER.description, kind: 'plane' },
   { id: 'fpv', label: FPV_QUAD.name, desc: FPV_QUAD.description, kind: 'quad' },
-  { id: 'drone', label: CAMERA_DRONE.name, desc: CAMERA_DRONE.description, kind: 'quad' },
 ] as const;
 
 export type AircraftId = (typeof AIRCRAFT_LIST)[number]['id'];
@@ -148,6 +118,5 @@ export function createAircraft(id: AircraftId) {
   switch (id) {
     case 'trainer': return new FixedWing(TRAINER);
     case 'fpv': return new Multirotor(FPV_QUAD);
-    case 'drone': return new Multirotor(CAMERA_DRONE);
   }
 }

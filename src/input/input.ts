@@ -24,6 +24,8 @@ export function defaultMapping(pad: Gamepad): ControllerMapping {
 }
 
 const SWITCH_FNS: Fn[] = ['arm', 'mode', 'rate', 'reset'];
+/** Channels the user can flip by hand on the Controller tab. */
+export const REVERSIBLE_FNS: Fn[] = ['throttle', 'roll', 'pitch', 'yaw', 'arm', 'mode', 'rate'];
 
 export class InputManager {
   private keys = new Set<string>();
@@ -128,6 +130,13 @@ export class InputManager {
     if (pad) {
       const m = this.mappingFor(pad);
       const B = { ...m.bindings };
+      const rev = this.settings.reversed[pad.id];
+      if (rev) {
+        for (const fn of REVERSIBLE_FNS) {
+          const b = B[fn];
+          if (b && rev[fn]) B[fn] = { ...b, reverse: !b.reverse };
+        }
+      }
       if (m.auto) {
         for (const fn of SWITCH_FNS) {
           const b = B[fn];

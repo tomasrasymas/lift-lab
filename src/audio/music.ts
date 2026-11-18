@@ -74,7 +74,7 @@ export class MusicPlayer {
     // tape-ish tone: soft top end + glue compression
     const tape = ctx.createBiquadFilter();
     tape.type = 'lowpass';
-    tape.frequency.value = 7200;
+    tape.frequency.value = 4200;
     tape.Q.value = 0.4;
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -20;
@@ -82,7 +82,7 @@ export class MusicPlayer {
     comp.attack.value = 0.01;
     comp.release.value = 0.25;
     this.bus = ctx.createGain();
-    this.bus.gain.value = 0.8;
+    this.bus.gain.value = 0.55;
     this.bus.connect(tape).connect(comp).connect(this.out).connect(destination);
     // reverb
     this.verb = ctx.createConvolver();
@@ -145,7 +145,7 @@ export class MusicPlayer {
     const pick = <T>(a: T[]) => a[Math.floor(rnd() * a.length)];
     const scaleName = pick(['major', 'minor', 'minor', 'dorian']);
     const root = 45 + Math.floor(rnd() * 8); // A2..E3
-    const bpm = 70 + Math.floor(rnd() * 18);
+    const bpm = 62 + Math.floor(rnd() * 14);
     this.song = {
       name: `${pick(NAMES_A)} ${pick(NAMES_B)} · ${NOTE[root % 12]} ${scaleName === 'major' ? 'major' : 'minor'} · ${bpm} BPM`,
       bpm, root, scale: SCALES[scaleName], prog: pick(PROGRESSIONS[scaleName]),
@@ -212,7 +212,7 @@ export class MusicPlayer {
       for (const [st, len] of S.keysRhythm) {
         if (st === s) {
           const voicing = chord.map((n, i) => n + (i === 0 && rnd() < 0.5 ? 12 : 0));
-          voicing.forEach((n, i) => this.epiano(n + 12, t + human() + i * 0.012, (len * beat) / 4, 0.16 + rnd() * 0.05));
+          voicing.forEach((n, i) => this.epiano(n + 12, t + human() + i * 0.012, (len * beat) / 4, 0.1 + rnd() * 0.03));
         }
       }
     }
@@ -223,15 +223,15 @@ export class MusicPlayer {
       if (s === 14 && rnd() < 0.3) this.bass(root + S.scale[(S.prog[bar % 4] + 1) % 7] - S.scale[S.prog[bar % 4] % 7], t, beat * 0.4, 0.5);
     }
     if (L.drums) {
-      if (S.kick[s]) this.kick(t + human(), 0.85);
-      if (SNARE[0][s]) this.snare(t + human() + 0.01, 0.55);
-      if (s === 15 && bar % 4 === 3 && rnd() < 0.6) this.snare(t, 0.25);
+      if (S.kick[s]) this.kick(t + human(), 0.6);
+      if (SNARE[0][s]) this.snare(t + human() + 0.01, 0.3);
+      if (s === 15 && bar % 4 === 3 && rnd() < 0.3) this.snare(t, 0.15);
     }
-    if (L.hats && S.hat[s]) this.hat(t + human(), s % 4 === 2 ? 0.2 : 0.12, s === 14 && rnd() < 0.15);
-    if (L.melody && s % 2 === 0 && rnd() < 0.22) {
+    if (L.hats && S.hat[s]) this.hat(t + human(), s % 4 === 2 ? 0.08 : 0.05, false);
+    if (L.melody && s % 4 === 0 && rnd() < 0.3) {
       const pent = [0, 2, 4, 7, 9].map((i) => (S.scale === SCALES.major ? i : [0, 3, 5, 7, 10][[0, 2, 4, 7, 9].indexOf(i)]));
-      const n = S.root + 36 + pent[Math.floor(rnd() * 5)] + (rnd() < 0.3 ? 12 : 0);
-      this.epiano(n, t + human(), beat * (rnd() < 0.5 ? 0.5 : 1), 0.11);
+      const n = S.root + 24 + pent[Math.floor(rnd() * 5)];
+      this.epiano(n, t + human(), beat * (rnd() < 0.5 ? 1 : 2), 0.07);
     }
   }
 
@@ -243,18 +243,18 @@ export class MusicPlayer {
     const car = ctx.createOscillator(), mod = ctx.createOscillator(), modG = ctx.createGain();
     car.frequency.value = f;
     mod.frequency.value = f;
-    modG.gain.setValueAtTime(f * 1.4, t);
+    modG.gain.setValueAtTime(f * 0.7, t);
     modG.gain.exponentialRampToValueAtTime(f * 0.08, t + 0.6);
     mod.connect(modG).connect(car.frequency);
     const g = ctx.createGain();
     const rel = dur + 0.9;
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vel, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(vel, t + 0.02);
     g.gain.exponentialRampToValueAtTime(vel * 0.35, t + 0.5);
     g.gain.exponentialRampToValueAtTime(0.0001, t + rel);
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.value = 2600;
+    lp.frequency.value = 1700;
     car.connect(lp).connect(g);
     g.connect(this.bus);
     g.connect(this.verbSend);
@@ -364,7 +364,7 @@ export class MusicPlayer {
     const d = buf.getChannelData(0);
     for (let i = 0; i < len; i++) {
       const r = Math.random();
-      d[i] = (r < 0.0004 ? (Math.random() * 2 - 1) * 0.9 : 0) + (Math.random() * 2 - 1) * 0.012;
+      d[i] = (r < 0.00006 ? (Math.random() * 2 - 1) * 0.5 : 0) + (Math.random() * 2 - 1) * 0.012;
     }
     const src = ctx.createBufferSource();
     src.buffer = buf;
@@ -373,7 +373,7 @@ export class MusicPlayer {
     hp.type = 'highpass';
     hp.frequency.value = 1200;
     const g = ctx.createGain();
-    g.gain.value = 0.12;
+    g.gain.value = 0.05;
     src.connect(hp).connect(g).connect(this.bus);
     src.start();
     this.crackleSrc = src;

@@ -120,6 +120,7 @@ export class ControllerWizard {
       if (b?.type === 'axis') { const c = this.mapping.cal[b.index]; c.center = (c.min + c.max) / 2; }
     }
     this.s.mappings[this.pad.id] = this.mapping;
+    delete this.s.reversed[this.pad.id]; // the wizard just learned the directions
     this.s.preferredGamepad = this.pad.id;
     this.onDone();
   }

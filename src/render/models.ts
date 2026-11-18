@@ -173,10 +173,10 @@ class Prop {
     if (axis === 'y') this.group.rotation.x = -Math.PI / 2; // disc in XZ plane
   }
   update(rpm: number, dt: number) {
-    const spin = rpm * 160; // rad/s visual (aliased like a camera would see)
+    const spin = rpm > 0.01 ? 25 + rpm * 160 : 0; // rad/s visual (aliased like a camera would see)
     this.angle += spin * dt * this.dir;
     this.blades.rotation.z = this.angle;
-    const blur = clamp((rpm - 0.06) / 0.14, 0, 1);
+    const blur = clamp((rpm - 0.02) / 0.06, 0, 1);
     (this.disc.material as THREE.MeshBasicMaterial).opacity = blur * 0.075;
     this.blades.visible = blur < 0.95;
   }
@@ -411,18 +411,19 @@ export class FpvQuadModel extends BaseModel {
     this.size = 0.25;
     const carbon = new THREE.MeshStandardMaterial({ color: 0xffffff, map: carbonTexture(), roughness: 0.55, metalness: 0.0, envMapIntensity: 0.4 });
     const motorMat = std(0x8a8f99, 0.25, 0.85), r = this.root;
-    const bellTop = std(0xd03030, 0.3, 0.7);
+    // front arms and motor caps match the orange front props, rear ones stay dark
+    const frontMat = std(0xff7a00, 0.5), rearCap = std(0x2a2a2a, 0.4, 0.5);
     const a = 0.08;
     const motors = [[a, -a], [a, a], [-a, a], [-a, -a]];
     for (const [x, z] of motors) {
       const len = Math.hypot(x, z);
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.005, len + 0.02), carbon);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.005, len + 0.02), z < 0 ? frontMat : carbon);
       arm.position.set(x / 2, -0.004, z / 2);
       arm.rotation.y = Math.atan2(x, z);
       r.add(arm);
       const mot = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.018, 16), motorMat);
       mot.position.set(x, 0.006, z);
-      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.0145, 0.0145, 0.004, 16), bellTop);
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.0145, 0.0145, 0.004, 16), z < 0 ? frontMat : rearCap);
       top.position.set(x, 0.016, z);
       r.add(mot, top);
     }
@@ -469,57 +470,9 @@ export class FpvQuadModel extends BaseModel {
   }
 }
 
-export class DroneModel extends BaseModel {
-  constructor() {
-    super();
-    this.size = 0.35;
-    const gray = paint(0x5b5f66, undefined, 0.35), dark = std(0x2b2d31, 0.5), white = std(0xe9e9e9, 0.5), r = this.root;
-    const body = new THREE.Mesh(fuselage([[-0.11, 0.05, 0.035, 0.0], [-0.08, 0.085, 0.06, 0.005], [0.04, 0.09, 0.065, 0.005], [0.1, 0.06, 0.045, 0.0]], 18, 2.6), gray);
-    r.add(body);
-    const a = 0.12;
-    const motors = [[a, -a], [a, a], [-a, a], [-a, -a]];
-    motors.forEach(([x, z]) => {
-      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.01, Math.hypot(x, z), 8), dark);
-      arm.position.set(x / 2, 0.0, z / 2);
-      arm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(x, 0, z).normalize());
-      r.add(arm);
-      const mot = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.018, 0.022, 14), dark);
-      mot.position.set(x, 0.008, z);
-      r.add(mot);
-      // landing legs under front arms, LEDs under motors
-      const front = z < 0;
-      const led = new THREE.Mesh(new THREE.SphereGeometry(0.008, 8, 6), glow(front ? 0xff2020 : 0x30ff50));
-      led.position.set(x, -0.01, z);
-      r.add(led);
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.075, 0.012), dark);
-      leg.position.set(x * 0.58, -0.045, z * 0.58);
-      r.add(leg);
-    });
-    // gimbal camera
-    const gimbal = new THREE.Group();
-    const camBody = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.03, 0.03), dark);
-    const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.01, 14).rotateX(Math.PI / 2), glass());
-    lens.position.z = -0.018;
-    gimbal.add(camBody, lens);
-    gimbal.position.set(0, -0.045, -0.09);
-    r.add(gimbal);
-    motors.forEach(([x, z], i) => {
-      const p = new Prop(0.1, 2, 0xf0f0f0, 'y', i % 2 === 0 ? -1 : 1, 0xdddddd);
-      p.group.position.set(x, 0.024, z);
-      r.add(p.group);
-      this.props.push(p);
-    });
-    void white;
-    this.fpvAnchor.position.set(0, -0.045, -0.11);
-    r.add(this.fpvAnchor);
-    finalize(r);
-  }
-}
-
 export function createModel(id: string, camTilt = 25): AircraftModel {
   switch (id) {
     case 'trainer': return new TrainerModel();
-    case 'fpv': return new FpvQuadModel(camTilt);
-    default: return new DroneModel();
+    default: return new FpvQuadModel(camTilt);
   }
 }

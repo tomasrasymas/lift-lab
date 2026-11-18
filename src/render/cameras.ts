@@ -13,7 +13,7 @@ export class CameraRig {
   autoZoom = true;
   fpvFov = 100;
   private lookTarget = new THREE.Vector3();
-  private chasePos = new THREE.Vector3();
+  private chaseYaw = 0;
   private chaseInit = false;
   private shake = 0;
 
@@ -52,19 +52,32 @@ export class CameraRig {
     } else if (this.mode === 'chase') {
       const back = opts.kind === 'quad' ? 1.6 : 3.2 * Math.max(0.8, model.size);
       const up = opts.kind === 'quad' ? 0.55 : 0.9;
-      // follow heading of motion (or nose when slow)
-      const fwd = _v.set(0, 0, -1).applyQuaternion(quat);
-      fwd.y *= 0.4;
-      if (vel.lengthSq() > 9 && opts.kind === 'plane') fwd.lerp(_v2.copy(vel).normalize(), 0.5);
-      fwd.normalize();
-      const desired = pos.clone().addScaledVector(fwd, -back).addScaledVector(UP, up);
-      if (!this.chaseInit) { this.chasePos.copy(desired); this.chaseInit = true; }
-      this.chasePos.lerp(desired, dampFactor(opts.kind === 'quad' ? 10 : 6, dt));
-      const gh = world.terrain.heightAt(this.chasePos.x, this.chasePos.z);
-      if (this.chasePos.y < gh + 0.3) this.chasePos.y = gh + 0.3;
-      cam.position.copy(this.chasePos);
+      // Heading to sit behind. Only the compass heading is followed, so rolls and flips
+      // never swing the camera around; when no heading can be read it holds the last one.
+      const nose = _v.set(0, 0, -1).applyQuaternion(quat);
+      const upright = _v2.set(0, 1, 0).applyQuaternion(quat).y;
+      const hSpeed = Math.hypot(vel.x, vel.z);
+      let hx = 0, hz = 0, valid = false;
+      if (opts.kind === 'plane' && hSpeed > 3) {
+        // a plane goes where it flies: the flight path stays readable through rolls
+        hx = vel.x; hz = vel.z; valid = true;
+      } else if (Math.hypot(nose.x, nose.z) > 0.35 && upright > 0.15) {
+        hx = nose.x; hz = nose.z; valid = true;
+      }
+      if (valid) {
+        const target = Math.atan2(hx, -hz);
+        if (!this.chaseInit) this.chaseYaw = target;
+        const d = Math.atan2(Math.sin(target - this.chaseYaw), Math.cos(target - this.chaseYaw));
+        this.chaseYaw += d * dampFactor(opts.kind === 'quad' ? 9 : 5, dt);
+      }
+      this.chaseInit = true;
+      const dir = _v.set(Math.sin(this.chaseYaw), 0, -Math.cos(this.chaseYaw));
+      // locked straight behind the aircraft: no positional lag, so it cannot fall behind or drift sideways
+      cam.position.copy(pos).addScaledVector(dir, -back).addScaledVector(UP, up);
+      const gh = world.terrain.heightAt(cam.position.x, cam.position.z);
+      if (cam.position.y < gh + 0.3) cam.position.y = gh + 0.3;
       cam.up.copy(UP);
-      cam.lookAt(_v2.copy(pos).addScaledVector(fwd, 1.5));
+      cam.lookAt(_v2.copy(pos).addScaledVector(dir, 1.5));
       cam.fov += (65 - cam.fov) * dampFactor(4, dt);
     } else {
       // FPV / cockpit camera

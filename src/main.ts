@@ -54,7 +54,7 @@ const fpvfx = new FpvEffect(q === 'low' ? 0 : 4);
 let linkQ = 1, linkTimer = 0;
 const _hit = { kind: 'tree' as const, normal: new THREE.Vector3(), depth: 0, soft: false };
 const _eul = new THREE.Euler();
-audio.ambience = settings.map;
+audio.ambience = settings.map === 'course' ? 'field' : settings.map;
 audio.onTrack = (name) => { hud.showTrack(name); setTrackLabel(name); };
 
 // blob shadow (used when real shadows are off)
@@ -104,7 +104,7 @@ function resetAircraft() {
   flightTime = 0;
   // sensible keyboard stick position after a reset: GPS drone = centre (hold), in-air FPV = hover
   const gps = aircraft instanceof Multirotor && aircraft.cfg.type === 'gps';
-  input.resetKeyboardThrottle(gps ? 0.5 : settings.spawnInAir ? (aircraft.kind === 'quad' ? 0.34 : 0.5) : 0);
+  input.resetKeyboardThrottle(gps ? 0.5 : settings.spawnInAir ? (aircraft.kind === 'quad' ? 0.27 : 0.5) : 0);
   rig.snap(aircraft.body.pos);
 }
 

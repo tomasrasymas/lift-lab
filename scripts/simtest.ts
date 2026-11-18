@@ -5,7 +5,7 @@ import { createAircraft, AircraftId } from '../src/sim/presets';
 import { neutralInputs, ControlInputs } from '../src/sim/aircraft';
 
 const DT = 1 / 400;
-const mapArg = (globalThis as unknown as { process: { argv: string[] } }).process.argv[3] as 'field' | 'forest' | 'city' | undefined;
+const mapArg = (globalThis as unknown as { process: { argv: string[] } }).process.argv[3] as 'field' | 'forest' | 'city' | 'course' | undefined;
 const world = new World(mapArg ?? 'field');
 world.wind.settings = { speed: 0, fromDeg: 90, gusts: 0, turbulence: 0 };
 world.wind.update(0);
@@ -53,17 +53,16 @@ if (!which || which === 'stall') {
 if (!which || which === 'quad') {
   run('fpv', false, 8, (t, i) => { i.throttle = t < 1 ? 0 : 0.36; i.mode = 1; }, 1);
   run('fpv', true, 4, (t, i) => { i.throttle = 0.33; i.mode = 0; i.roll = t > 1 && t < 1.55 ? 1 : 0; }, 0.25);
-  run('drone', false, 12, (t, i) => { i.mode = 0; i.throttle = t < 1 ? 0 : t < 4 ? 0.9 : 0.5; i.pitch = t > 6 ? 1 : 0; }, 1);
 }
 if (!which || which === 'wind') {
   world.wind.settings = { speed: 6, fromDeg: 90, gusts: 0.5, turbulence: 0.5 };
   world.wind.update(0);
-  run('drone', true, 10, (_t, i) => { i.mode = 0; i.throttle = 0.5; }, 2);
+  run('fpv', true, 10, (_t, i) => { i.mode = 1; i.throttle = 0.36; }, 2);
 }
 
 if (which === 'battery') {
   // hover / cruise until the pack is empty: flight time check
-  for (const [id, thr, mode] of [['trainer', 0.6, 2], ['fpv', 0.36, 1], ['drone', 0.5, 0]] as [AircraftId, number, 0 | 1 | 2][]) {
+  for (const [id, thr, mode] of [['trainer', 0.6, 2], ['fpv', 0.36, 1]] as [AircraftId, number, 0 | 1 | 2][]) {
     const ac = createAircraft(id);
     ac.reset(world, { inAir: true });
     const inp = neutralInputs(); inp.arm = true; inp.throttle = thr; inp.mode = mode;

@@ -152,7 +152,7 @@ export abstract class Aircraft {
         const vn = b.vel.dot(n);
         if (vn < 0) {
           const limit = this.kind === 'quad' ? 6 : 3.5;
-          if (-vn > limit) this.crash(({ gate: 'Hit a gate', building: 'Hit a building', rock: 'Hit a rock', pole: 'Hit a lamp post', tree: 'Hit a tree trunk' } as const)[hit.kind]);
+          if (-vn > limit) this.crash(({ gate: 'Hit a gate', building: 'Hit a building', rock: 'Hit a rock', pole: 'Hit a lamp post', wall: 'Hit an obstacle', tree: 'Hit a tree trunk' } as const)[hit.kind]);
           this.telemetry.impact = Math.max(this.telemetry.impact, -vn);
           b.vel.addScaledVector(n, -1.35 * vn);
           const vt = this._tmpC.copy(b.vel).addScaledVector(n, -b.vel.dot(n));

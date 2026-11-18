@@ -2,7 +2,7 @@ import { AIRCRAFT_LIST, AircraftId } from '../sim/presets';
 import { MAP_LIST, MapId } from '../sim/world';
 import type { Settings, ViewMode, Quality, Fn } from '../settings';
 import { saveSettings } from '../settings';
-import { InputManager } from '../input/input';
+import { InputManager, REVERSIBLE_FNS } from '../input/input';
 import { ControllerWizard } from './wizard';
 
 export interface MenuCallbacks {
@@ -21,7 +21,6 @@ const ICONS: Record<string, string> = {
   sport: '<svg viewBox="0 0 64 32"><path d="M4 16h40l10-2h6v4h-6l-10-2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="16" y="18" width="22" height="3" fill="currentColor"/><path d="M52 11v10" stroke="currentColor" stroke-width="2"/></svg>',
   wing: '<svg viewBox="0 0 64 32"><path d="M32 6 L60 24 L52 26 L32 16 L12 26 L4 24 Z" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
   fpv: '<svg viewBox="0 0 64 32"><path d="M14 6 L50 26 M50 6 L14 26" stroke="currentColor" stroke-width="2.5"/><circle cx="14" cy="6" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="50" cy="6" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="14" cy="26" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="50" cy="26" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="26" y="12" width="12" height="8" fill="currentColor"/></svg>',
-  drone: '<svg viewBox="0 0 64 32"><rect x="24" y="11" width="16" height="10" rx="4" fill="currentColor"/><path d="M24 13 L12 7 M40 13 L52 7 M24 19 L12 25 M40 19 L52 25" stroke="currentColor" stroke-width="2"/><path d="M4 7h16 M44 7h16 M4 25h16 M44 25h16" stroke="currentColor" stroke-width="1.5"/></svg>',
 };
 
 export class Menu {
@@ -157,6 +156,10 @@ export class Menu {
             : `<p class="warn">No controller detected. Connect your radio over USB and <b>move a stick</b> — browsers only reveal a controller after it sends input.</p>`}
           <button class="btn primary" id="wiz" ${pads.length ? '' : 'disabled'}>Run setup wizard</button>
           ${mapped ? '<button class="btn ghost" id="clearmap">Forget mapping</button>' : ''}
+          ${active ? `
+            <h3>Reverse channels</h3>
+            <p class="muted small">Tick a channel if it moves the wrong way in Live channels.</p>
+            <div class="revgrid">${REVERSIBLE_FNS.filter((fn) => this.input.mappingFor(active).bindings[fn]).map((fn) => `<label class="check"><input type="checkbox" data-rev="${fn}" ${this.s.reversed[active.id]?.[fn] ? 'checked' : ''}> ${InputManager.fnLabel(fn)}</label>`).join('')}</div>` : ''}
           <h3>RadioMaster Pocket / EdgeTX setup</h3>
           <ol class="steps">
             <li>Turn the radio on, plug the USB-C cable into the computer.</li>
@@ -185,6 +188,13 @@ export class Menu {
       </div>`;
     b.querySelector('#wiz')?.addEventListener('click', () => { const p = this.input.pickPad(); if (p) this.wizard.start(p); });
     b.querySelector('#clearmap')?.addEventListener('click', () => { if (active) { delete this.s.mappings[active.id]; this.save(); this.render(); } });
+    b.querySelectorAll<HTMLInputElement>('[data-rev]').forEach((el) => el.addEventListener('change', () => {
+      if (!active) return;
+      const rev = (this.s.reversed[active.id] ??= {});
+      const fn = el.dataset.rev as Fn;
+      if (el.checked) rev[fn] = true; else delete rev[fn];
+      this.save();
+    }));
     b.querySelector<HTMLSelectElement>('#padsel')?.addEventListener('change', (e) => { this.s.preferredGamepad = (e.target as HTMLSelectElement).value; this.save(); this.render(); });
   }
 
@@ -308,7 +318,6 @@ export class Menu {
           <table class="keys">
             <tr><td>Airplanes</td><td>1 Manual · 2 Gyro (rate damping) · 3 Self-level trainer</td></tr>
             <tr><td>FPV quad</td><td>1 Acro · 2 Angle · 3 Horizon</td></tr>
-            <tr><td>Camera drone</td><td>1 GPS (holds position) · 2 ATTI (drifts with wind) · 3 Manual</td></tr>
           </table>
         </div>
         <div>
@@ -321,7 +330,7 @@ export class Menu {
             <li><b>Landing.</b> Low throttle on approach, keep speed above stall, flare just above the runway.</li>
             <li><b>Wind.</b> Add wind and gusts once you are comfortable.</li>
           </ol>
-          <p class="muted">Quads: start with the camera drone in GPS mode, then ATTI, then the FPV quad in Angle, then Acro.</p>
+          <p class="muted">Quads: start with the FPV quad in Angle mode, then Horizon, then Acro. The Obstacle course location has windows and tunnels to practise on.</p>
           <h3>Real-world behaviour you will notice</h3>
           <ul class="steps">
             <li><b>Arming:</b> the motor only arms with the ARM switch on <i>and</i> throttle low — planes too (throttle-cut safety).</li>

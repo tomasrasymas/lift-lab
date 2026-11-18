@@ -7,10 +7,11 @@ import { clamp, fbm2, lerp, mulberry32, noise1, smoothstep, DEG } from './math';
 export const TERRAIN_SIZE = 6000;
 export const TERRAIN_RES = 256; // cells per side
 
-export type MapId = 'field' | 'forest' | 'city';
+export type MapId = 'field' | 'forest' | 'city' | 'course';
 export const MAP_LIST: { id: MapId; label: string; desc: string }[] = [
   { id: 'field', label: 'Airfield', desc: 'RC club field: asphalt runway, mown grass, race gates, a lake. Best for learning.' },
   { id: 'forest', label: 'Forest', desc: 'Hilly forest with a grass strip in a clearing, tall pines, trails, a river ravine, rocks and fallen logs.' },
+  { id: 'course', label: 'Obstacle course', desc: 'Flat practice field for quads: walls with windows that get smaller, a wall slalom, straight, bent and raised tunnels, and a dive tower.' },
   { id: 'city', label: 'City', desc: 'Downtown towers, streets with traffic, parks and abandoned concrete buildings to fly through.' },
 ];
 
@@ -19,10 +20,10 @@ export type Surface = 'asphalt' | 'grass' | 'water' | 'concrete';
 export interface TreeData { x: number; y: number; z: number; h: number; r: number; type: number; }
 export interface BoxCollider { min: Vector3; max: Vector3; kind: Hit['kind']; }
 export interface GateData { x: number; z: number; yaw: number; w: number; h: number; }
-export interface Hit { kind: 'tree' | 'building' | 'gate' | 'rock' | 'pole'; normal: Vector3; depth: number; soft: boolean; }
+export interface Hit { kind: 'tree' | 'building' | 'gate' | 'rock' | 'pole' | 'wall'; normal: Vector3; depth: number; soft: boolean; }
 export type BuildingStyle = 'glass' | 'office' | 'brick' | 'concrete' | 'house';
 export interface Building { x: number; z: number; w: number; d: number; h: number; style: BuildingStyle; y: number; }
-export interface Solid { min: Vector3; max: Vector3; kind: 'concrete' | 'log' | 'rock' | 'pole' | 'wood'; }
+export interface Solid { min: Vector3; max: Vector3; kind: 'concrete' | 'log' | 'rock' | 'pole' | 'wood' | 'course'; color?: number; }
 export interface Road { x0: number; z0: number; x1: number; z1: number; w: number; }
 export interface Rect { x0: number; z0: number; x1: number; z1: number; }
 
@@ -38,7 +39,8 @@ export interface Layout {
   windsock: Vector3;
 }
 
-const map3 = (m: MapId, field: number, forest: number, city: number) => (m === 'field' ? field : m === 'forest' ? forest : city);
+/** The obstacle course shares the airfield's terrain and ground layers. */
+const map3 = (m: MapId, field: number, forest: number, city: number) => (m === 'field' || m === 'course' ? field : m === 'forest' ? forest : city);
 const inRect = (r: Rect | null, x: number, z: number, m = 0) => !!r && x > r.x0 - m && x < r.x1 + m && z > r.z0 - m && z < r.z1 + m;
 const rectDist = (r: Rect, x: number, z: number) => Math.hypot(Math.max(r.x0 - x, 0, x - r.x1), Math.max(r.z0 - z, 0, z - r.z1));
 
@@ -88,13 +90,16 @@ function cityHeight(x: number, z: number) {
   return h;
 }
 
+const fieldLayout = (id: MapId): Layout => ({
+  id, pilot: new Vector3(0, 1.7, 26), pad: new Vector3(0, 0, 14),
+  runway: { cx: 0, cz: 0, halfLength: 60, halfWidth: 5, surface: 'asphalt' },
+  mown: { x0: -180, z0: -95, x1: 180, z1: 95 }, noGrass: null, waterLevel: -2.2,
+  airSpawn: new Vector3(-160, 45, 0), windsock: new Vector3(-18, 0, 40),
+});
+
 const LAYOUTS: Record<MapId, Layout> = {
-  field: {
-    id: 'field', pilot: new Vector3(0, 1.7, 26), pad: new Vector3(0, 0, 14),
-    runway: { cx: 0, cz: 0, halfLength: 60, halfWidth: 5, surface: 'asphalt' },
-    mown: { x0: -180, z0: -95, x1: 180, z1: 95 }, noGrass: null, waterLevel: -2.2,
-    airSpawn: new Vector3(-160, 45, 0), windsock: new Vector3(-18, 0, 40),
-  },
+  field: fieldLayout('field'),
+  course: fieldLayout('course'),
   forest: {
     id: 'forest', pilot: new Vector3(0, 1.7, 24), pad: new Vector3(14, 0, 15),
     runway: { cx: 0, cz: 0, halfLength: 85, halfWidth: 9, surface: 'grass' },
@@ -109,7 +114,7 @@ const LAYOUTS: Record<MapId, Layout> = {
   },
 };
 
-const HEIGHTS: Record<MapId, (x: number, z: number) => number> = { field: fieldHeight, forest: forestHeight, city: cityHeight };
+const HEIGHTS: Record<MapId, (x: number, z: number) => number> = { field: fieldHeight, course: fieldHeight, forest: forestHeight, city: cityHeight };
 
 /* ------------------------------------------------------------------ */
 /*  Heightfield                                                        */
@@ -268,7 +273,7 @@ export class World {
   constructor(readonly map: MapId = 'field', treeLimit = 9500) {
     this.layout = LAYOUTS[map];
     this.terrain = new Terrain(this.layout, HEIGHTS[map]);
-    if (map === 'field') this.buildField();
+    if (map === 'field' || map === 'course') this.buildField(map === 'course');
     else if (map === 'forest') this.buildForest();
     else this.buildCity();
     if (this.trees.length > treeLimit) {
@@ -286,7 +291,7 @@ export class World {
     const t = this.terrain, L = this.layout, r = L.runway;
     t.pad = { x: L.pad.x, z: L.pad.z, r: 1.75, h: map3(this.map, 0.025, 0.025, 0.1) };
     if (L.mown) t.layers.push({ r: L.mown, h: this.map === 'city' ? 0.093 : 0.01 });
-    if (this.map === 'field') t.layers.push({ r: { x0: r.cx - r.halfLength, z0: r.cz - r.halfWidth, x1: r.cx + r.halfLength, z1: r.cz + r.halfWidth }, h: 0.02 });
+    if (this.map === 'field' || this.map === 'course') t.layers.push({ r: { x0: r.cx - r.halfLength, z0: r.cz - r.halfWidth, x1: r.cx + r.halfLength, z1: r.cz + r.halfWidth }, h: 0.02 });
     if (this.map === 'city') {
       t.layers.push({ r: { x0: -CITY_EXTENT, z0: -CITY_EXTENT, x1: CITY_EXTENT, z1: CITY_EXTENT }, h: 0.03 });
       for (const rd of this.roads) t.layers.push({ r: rd, h: 0.07 });
@@ -310,8 +315,9 @@ export class World {
     const idx = this.boxes.length;
     this.boxes.push({ min, max, kind });
     const c = this.boxCell;
-    for (let ix = Math.floor(min.x / c); ix <= Math.floor(max.x / c); ix++) {
-      for (let iz = Math.floor(min.z / c); iz <= Math.floor(max.z / c); iz++) {
+    const pad = 0.5; // larger than any aircraft collision radius
+    for (let ix = Math.floor((min.x - pad) / c); ix <= Math.floor((max.x + pad) / c); ix++) {
+      for (let iz = Math.floor((min.z - pad) / c); iz <= Math.floor((max.z + pad) / c); iz++) {
         const k = this.key(ix, iz);
         let arr = this.boxGrid.get(k);
         if (!arr) this.boxGrid.set(k, (arr = []));
@@ -320,9 +326,9 @@ export class World {
     }
   }
 
-  private addSolid(min: Vector3, max: Vector3, kind: Solid['kind']) {
-    this.solids.push({ min, max, kind });
-    this.addBox(min, max, kind === 'rock' || kind === 'log' ? 'rock' : kind === 'pole' ? 'pole' : 'building');
+  private addSolid(min: Vector3, max: Vector3, kind: Solid['kind'], color?: number) {
+    this.solids.push({ min, max, kind, color });
+    this.addBox(min, max, kind === 'rock' || kind === 'log' ? 'rock' : kind === 'pole' ? 'pole' : kind === 'course' ? 'wall' : 'building');
   }
 
   /** Scatter trees by a density function. */
@@ -348,7 +354,7 @@ export class World {
   }
 
   /* --------------------------- Airfield ---------------------------- */
-  private buildField() {
+  private buildField(course = false) {
     this.scatterTrees(9000, 2600, 1234, (x, z, f) => {
       if (inRect(FIELD_RECT, x, z, 35)) return 0;
       if (Math.abs(z) < 60 && Math.abs(x) < 420) return 0;
@@ -372,6 +378,7 @@ export class World {
       if (Math.abs(z) < 60 && Math.abs(x) > 200) continue;
       this.bushes.push({ x, z, s: 0.9 + rnd() * 1.6 });
     }
+    if (course) { this.buildCourse(); return; }
     const box = (cx: number, cz: number, sx: number, sy: number, sz: number) => {
       const y = this.terrain.heightAt(cx, cz);
       this.addBox(new Vector3(cx - sx / 2, y - 1, cz - sz / 2), new Vector3(cx + sx / 2, y + sy, cz + sz / 2), 'building');
@@ -381,6 +388,95 @@ export class World {
     box(28, 48, 6, 3, 4);
     const gates: [number, number, number][] = [[40, -45, 0], [100, -70, 40], [120, -20, 100], [70, 20, 180], [-20, -35, 200], [-90, -60, 240], [-110, -10, 300]];
     for (const [x, z, yaw] of gates) this.gates.push({ x, z, yaw: yaw * DEG, w: 3, h: 2.2 });
+  }
+
+  /* ------------------------ Obstacle course ------------------------ */
+  /** Walls with windows and tunnels on the flat ground behind the runway. All boxes, so physics and visuals match. */
+  private buildCourse() {
+    const T = 0.3; // wall thickness
+    const WALL = 0xb9bcc0, FRAME = 0xff7a00, TUNNEL = 0x8794a8, PORTAL = 0xffc400, LEG = 0x555b66;
+    const box = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, color: number) => {
+      if (x1 - x0 < 0.01 || y1 - y0 < 0.01 || z1 - z0 < 0.01) return;
+      this.addSolid(new Vector3(x0, y0, z0), new Vector3(x1, y1, z1), 'course', color);
+    };
+    /**
+     * Wall centred on (cx, cz) with rectangular windows. `axis` is the direction you fly through it.
+     * Windows: u = centre along the wall, y = bottom edge; they must not overlap along the wall.
+     */
+    const wall = (cx: number, cz: number, axis: 'x' | 'z', width: number, height: number, holes: { u: number; y: number; w: number; h: number }[]) => {
+      const put = (u0: number, u1: number, y0: number, y1: number, t: number, c: number) => {
+        if (axis === 'x') box(cx - t / 2, y0, cz + u0, cx + t / 2, y1, cz + u1, c);
+        else box(cx + u0, y0, cz - t / 2, cx + u1, y1, cz + t / 2, c);
+      };
+      let u = -width / 2;
+      const f = 0.18, ft = T + 0.12, e = 0.02; // bright frame, proud of the wall, so the opening reads from far away
+      for (const h of [...holes].sort((p, q) => p.u - q.u)) {
+        const a = h.u - h.w / 2, b = h.u + h.w / 2, top = h.y + h.h;
+        put(u, a, 0, height, T, WALL);
+        put(a, b, 0, h.y, T, WALL);
+        put(a, b, top, height, T, WALL);
+        put(a - f, b + f, top - e, top + f, ft, FRAME);
+        if (h.y > f) put(a - f, b + f, h.y - f, h.y + e, ft, FRAME);
+        put(a - f, a + e, h.y, top, ft, FRAME);
+        put(b - e, b + f, h.y, top, ft, FRAME);
+        u = b;
+      }
+      put(u, width / 2, 0, height, T, WALL);
+    };
+    /**
+     * Box tunnel starting at (x, z) and running `len` metres along +axis, open at both ends.
+     * `base` lifts it onto legs, `skylight` cuts a gap [from, to] out of the roof.
+     */
+    const tunnel = (x: number, z: number, axis: 'x' | 'z', len: number, w: number, h: number, opts: { base?: number; skylight?: [number, number] } = {}) => {
+      const base = opts.base ?? 0, hw = w / 2, top = base + h, e = 0.02;
+      const seg = (a0: number, a1: number, s0: number, s1: number, y0: number, y1: number, c: number) => {
+        if (axis === 'x') box(x + a0, y0, z + s0, x + a1, y1, z + s1, c);
+        else box(x + s0, y0, z + a0, x + s1, y1, z + a1, c);
+      };
+      seg(0, len, -hw - T, -hw, base, top, TUNNEL);
+      seg(0, len, hw, hw + T, base, top, TUNNEL);
+      const sk = opts.skylight;
+      if (sk) { seg(0, sk[0], -hw - T, hw + T, top, top + T, TUNNEL); seg(sk[1], len, -hw - T, hw + T, top, top + T, TUNNEL); }
+      else seg(0, len, -hw - T, hw + T, top, top + T, TUNNEL);
+      if (base > 0) {
+        seg(0, len, -hw - T, hw + T, base - T, base, TUNNEL);
+        for (const a of [0.6, len - 0.6]) for (const s of [-hw, hw]) seg(a - 0.15, a + 0.15, s - 0.15, s + 0.15, 0, base - T, LEG);
+      }
+      // yellow portal around each mouth
+      for (const [a0, a1] of [[-0.12, 0.25], [len - 0.25, len + 0.12]]) {
+        seg(a0, a1, -hw - T - 0.12, hw + T + 0.12, top - e, top + T + 0.12, PORTAL);
+        seg(a0, a1, -hw - T - 0.12, -hw + e, base, top, PORTAL);
+        seg(a0, a1, hw - e, hw + T + 0.12, base, top, PORTAL);
+      }
+    };
+
+    // 1) Windows facing the pilot: big, medium, small
+    wall(40, -45, 'z', 14, 8, [{ u: 0, y: 1, w: 6, h: 4 }]);
+    wall(60, -45, 'z', 14, 8, [{ u: -3, y: 1.5, w: 3.5, h: 2.5 }, { u: 3.5, y: 4, w: 3, h: 2.5 }]);
+    wall(80, -45, 'z', 14, 8, [{ u: -4, y: 0.8, w: 2, h: 1.6 }, { u: 0, y: 4.5, w: 1.6, h: 1.4 }, { u: 4, y: 2, w: 1.2, h: 1.2 }]);
+
+    // 2) Wall slalom along the field: each window is smaller and somewhere else
+    const run: [number, number, number, number][] = [[0, 1, 6, 4], [-3, 1, 4, 3], [3, 2.5, 3.5, 2.5], [-2, 3.5, 3, 2.2], [2.5, 0.8, 2.4, 1.8], [0, 2.5, 1.8, 1.5]];
+    run.forEach(([u, y, w, h], i) => wall(30 + i * 16, -75, 'x', 14, 7, [{ u, y, w, h }]));
+
+    // 3) Dive tower: drop in from the top, fly out through a door at the bottom
+    const tx = 150, tz = -60, ti = 3.5, th = 12, door = [{ u: 0, y: 0, w: 2.6, h: 2.2 }];
+    wall(tx, tz + ti / 2 + T / 2, 'z', ti + 2 * T, th, door);
+    wall(tx, tz - ti / 2 - T / 2, 'z', ti + 2 * T, th, []);
+    wall(tx - ti / 2 - T / 2, tz, 'x', ti, th, door);
+    wall(tx + ti / 2 + T / 2, tz, 'x', ti, th, []);
+
+    // 4) Tunnels
+    tunnel(-70, -40, 'x', 40, 5, 3.5, { skylight: [17, 23] }); // wide, with a roof gap to dive through
+    tunnel(-160, -40, 'x', 70, 3, 2.4);                        // long and narrow
+    tunnel(-50, -90, 'z', 22, 3.2, 2.6, { base: 3 });          // raised, pointing at the pilot
+    // L-shaped tunnel: 30 m along the field, a 90 degree corner, then 23 m toward the pilot
+    const lw = 4.5, lh = 3, lx = -130, lz = -80;
+    tunnel(lx - 30, lz, 'x', 30, lw, lh);
+    tunnel(lx + lw / 2, lz + lw / 2, 'z', 23, lw, lh);
+    box(lx, 0, lz - lw / 2 - T, lx + lw + T, lh, lz - lw / 2, TUNNEL);          // corner, far wall
+    box(lx + lw, 0, lz - lw / 2 - T, lx + lw + T, lh, lz + lw / 2, TUNNEL);      // corner, end wall
+    box(lx, lh, lz - lw / 2 - T, lx + lw + T, lh + T, lz + lw / 2, TUNNEL);      // corner, roof
   }
 
   /* ---------------------------- Forest ----------------------------- */

@@ -37,6 +37,8 @@ export interface Settings {
   fpvRates: RateProfile;
   simSpeed: number;
   mappings: Record<string, ControllerMapping>;
+  /** per-controller manual channel reversal, applied on top of the mapping */
+  reversed: Record<string, Partial<Record<Fn, boolean>>>;
   preferredGamepad: string | null;
   keyboardMode: 0 | 1 | 2;
 }
@@ -45,7 +47,7 @@ const KEY = 'liftlab.settings.v1';
 
 export const defaultSettings = (): Settings => ({
   aircraft: 'trainer',
-  view: { trainer: 'los', fpv: 'fpv', drone: 'los' },
+  view: { trainer: 'los', fpv: 'fpv' },
   map: 'field',
   fpvVideo: 'digital',
   fpvProps: true,
@@ -70,6 +72,7 @@ export const defaultSettings = (): Settings => ({
   fpvRates: { center: 70, max: 670, expo: 0.54 },
   simSpeed: 1,
   mappings: {},
+  reversed: {},
   preferredGamepad: null,
   keyboardMode: 0,
 });
@@ -88,8 +91,8 @@ export function loadSettings(): Settings {
     const raw = localStorage.getItem(KEY);
     if (!raw) return d;
     const s = JSON.parse(raw);
-    if (!['trainer', 'fpv', 'drone'].includes(s.aircraft)) s.aircraft = 'trainer';
-    if (!['field', 'forest', 'city'].includes(s.map)) s.map = 'field';
+    if (!['trainer', 'fpv'].includes(s.aircraft)) s.aircraft = 'trainer';
+    if (!['field', 'forest', 'city', 'course'].includes(s.map)) s.map = 'field';
     return { ...d, ...s, view: { ...d.view, ...(s.view ?? {}) }, wind: { ...d.wind, ...(s.wind ?? {}) }, fpvRates: { ...d.fpvRates, ...(s.fpvRates ?? {}) } };
   } catch {
     return d;

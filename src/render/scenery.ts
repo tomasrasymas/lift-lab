@@ -100,6 +100,7 @@ export class Scenery {
     }
     this.buildMown();
     if (map === 'field') { this.buildRunwayProps(); this.buildStructures(); this.buildGates(); }
+    if (map === 'course') { this.buildRunwayProps(); this.buildCourse(); }
     if (map === 'forest') { this.buildTrails(); this.buildForestProps(); this.buildFarmhouses(); }
     this.buildPad();
     this.buildClouds();
@@ -473,6 +474,27 @@ export class Scenery {
       add(house);
     }
     }
+
+  /** Obstacle course walls and tunnels: one merged mesh, coloured per box. */
+  private buildCourse() {
+    const geos: THREE.BufferGeometry[] = [];
+    const col = new THREE.Color();
+    for (const b of this.world.solids) {
+      if (b.kind !== 'course') continue;
+      const g = new THREE.BoxGeometry(b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z);
+      g.translate((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, (b.min.z + b.max.z) / 2);
+      col.set(b.color ?? 0xb9bcc0);
+      const n = g.getAttribute('position').count;
+      const arr = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) arr.set([col.r, col.g, col.b], i * 3);
+      g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+      geos.push(g);
+    }
+    if (!geos.length) return;
+    const mesh = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshLambertMaterial({ vertexColors: true }));
+    mesh.castShadow = mesh.receiveShadow = this.quality !== 'low';
+    this.scene.add(mesh);
+  }
 
   private buildGates() {
     const tex = T.stripeTexture('#ff6a00', '#1a1a1a', 10);

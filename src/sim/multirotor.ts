@@ -18,6 +18,7 @@ export interface QuadConfig {
   motorTau: number;     // spool time constant (s)
   idle: number;         // idle motor command (0..1)
   kQ: number;           // yaw torque / thrust (m)
+  rotorInertia: number; // prop + motor bell inertia about the shaft (kg m^2)
   propDiameter: number;
   pitchSpeed: number;   // prop pitch speed (m/s)
   cda: [number, number, number];
@@ -193,9 +194,12 @@ export class Multirotor extends Aircraft {
     const ex = spX - w.x, ey = spY - w.y, ez = spZ - w.z;
     const airborne = !this.onGround || input.throttle > 0.15;
     if (this.armed && airborne) {
-      this.iRate.x = clamp(this.iRate.x + ex * dt, -0.5, 0.5);
-      this.iRate.y = clamp(this.iRate.y + ey * dt, -0.5, 0.5);
-      this.iRate.z = clamp(this.iRate.z + ez * dt, -0.5, 0.5);
+      // I-term relax: do not wind the integrator up while the rate is still far from a fresh setpoint
+      // (otherwise every stick snap overshoots the requested rate)
+      const relax = (e: number) => e * clamp(1 - Math.abs(e) / 2.5, 0, 1);
+      this.iRate.x = clamp(this.iRate.x + relax(ex) * dt, -0.5, 0.5);
+      this.iRate.y = clamp(this.iRate.y + relax(ey) * dt, -0.5, 0.5);
+      this.iRate.z = clamp(this.iRate.z + relax(ez) * dt, -0.5, 0.5);
     } else this.iRate.multiplyScalar(0.9);
     const I = b.inertia, k = cfg.pid;
     const tx = I.x * (k.kp * ex + k.ki * this.iRate.x);
@@ -206,11 +210,17 @@ export class Multirotor extends Aircraft {
     const a = cfg.arm;
     const base = clamp(collective / 4, Tidle, Tmax);
     const d = [0, 0, 0, 0];
+    // Yaw only comes from the small drag-torque difference between the rotors, so an unlimited yaw demand
+    // would push two motors to full and stop the other two (and airmode would then launch the quad upward).
+    // Like a real flight controller, yaw is limited first: to 20 % of motor range, and to the thrust that is
+    // actually there to take away plus a small airmode margin.
+    let yawD = ty / (4 * cfg.kQ);
+    const yawCap = Math.min(0.2 * Tmax, Math.max(0, base - Tidle) + 0.04 * Tmax);
+    yawD = clamp(yawD, -yawCap, yawCap);
     for (let i = 0; i < 4; i++) {
       const m = this.motors[i];
-      d[i] = (-m.pos.z * tx) / (4 * a * a) + (m.pos.x * tz) / (4 * a * a) + (-m.spin * ty) / (4 * cfg.kQ);
+      d[i] = (-m.pos.z * tx) / (4 * a * a) + (m.pos.x * tz) / (4 * a * a) - m.spin * yawD;
     }
-    // yaw has lowest authority: limit it first
     let lo = Math.min(...d), hi = Math.max(...d);
     const span = Tmax - Tidle;
     if (hi - lo > span) { const s = span / (hi - lo); for (let i = 0; i < 4; i++) d[i] *= s; lo *= s; hi *= s; }
@@ -230,7 +240,12 @@ export class Multirotor extends Aircraft {
       if (this.armed) u = Math.sqrt(clamp((base + d[i] + shift) / Tmax, 0, 1)) * vScale;
       // motors spin up faster than they brake down
       const tauM = u > m.n ? cfg.motorTau * (1.25 - 0.5 * m.n) : cfg.motorTau * 1.5;
-      m.n += (u - m.n) * clamp(dt / tauM, 0, 1);
+      const dn = (u - m.n) * clamp(dt / tauM, 0, 1);
+      m.n += dn;
+      // spinning a rotor up or down twists the frame the other way: this reaction, not rotor drag,
+      // is what makes a real quad snap into a yaw
+      _p.set(0, -m.spin * cfg.rotorInertia * ((cfg.maxRpm * 2 * Math.PI) / 60) * (dn / dt), 0);
+      b.addTorqueBody(_p);
       power += cfg.motorPower * (0.12 * m.n + 0.88 * m.n * m.n * m.n); // prop power ~ n^3 plus motor/ESC losses
       // axial inflow through this rotor (positive = air coming from above = climbing)
       b.pointVelocityBody(m.pos, _p);

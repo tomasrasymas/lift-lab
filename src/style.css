@@ -104,6 +104,7 @@ p { line-height: 1.5; font-size: 14px; }
 .keys td { padding: 5px 6px; border-bottom: 1px solid var(--line); }
 .keys td:first-child { color: var(--accent); font-weight: 700; white-space: nowrap; width: 90px; }
 .live { display: flex; flex-direction: column; gap: 6px; }
+.revgrid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 12px; margin-bottom: 6px; }
 .lv { display: grid; grid-template-columns: 70px 1fr 48px; align-items: center; gap: 8px; font-size: 12px; }
 .lv span { color: var(--muted); }
 .lv b { text-align: right; font-weight: 600; }
