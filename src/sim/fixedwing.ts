@@ -126,7 +126,7 @@ export class FixedWing extends Aircraft {
     this.rpm = 0;
     this.iPitch = 0;
     this.motorArmed = false;
-    this.armOnSpawn = !!opts.inAir;
+    this.armOnSpawn = !!opts.inAir || !!opts.easyArm;
     for (const k of Object.keys(this.target)) { this.target[k] = 0; this.telemetry.surfaces[k] = 0; }
     const yaw = -Math.PI / 2; // face +X (east) - runway heading
     const b = this.body;

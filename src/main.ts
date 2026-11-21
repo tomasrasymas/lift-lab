@@ -74,6 +74,11 @@ let paused = false;
 let flightTime = 0;
 let lastInputs: ControlInputs = neutralInputs();
 let hudVisible = true;
+// Candy land is forgiving: no battery drain, no throttle-low rule for arming, and a crashed or
+// upside-down aircraft is put back on its feet by itself.
+const kidMode = settings.map === 'candy';
+let rescueT = 0;
+const _up = new THREE.Vector3();
 
 function applyQuadSettings() {
   if (aircraft instanceof Multirotor && aircraft.cfg.type === 'fpv') {
@@ -91,13 +96,14 @@ function loadAircraft(id: AircraftId) {
   applyEnv(model.root);
   scene.add(model.root);
   audio.setProfile(soundProfile(aircraft));
-  if (aircraft.battery) aircraft.battery.drain = settings.batterySim;
+  if (aircraft.battery) aircraft.battery.drain = settings.batterySim && !kidMode;
   rig.setMode(settings.view[id]);
   resetAircraft();
 }
 
 function resetAircraft() {
-  aircraft.reset(world, { inAir: settings.spawnInAir });
+  aircraft.reset(world, { inAir: settings.spawnInAir, easyArm: kidMode });
+  rescueT = 0;
   prevPos.copy(aircraft.body.pos);
   prevQuat.copy(aircraft.body.quat);
   acc = 0;
@@ -120,7 +126,7 @@ const menu = new Menu(settings, input, {
     rig.fpvFov = settings.fpvFov;
     audio.setVolumes({ master: settings.volume, sfx: settings.sfxVolume, music: settings.musicVolume, ambient: settings.ambientVolume });
     if (audio.musicEnabled !== settings.musicOn) audio.setMusic(settings.musicOn);
-    if (aircraft.battery) aircraft.battery.drain = settings.batterySim;
+    if (aircraft.battery) aircraft.battery.drain = settings.batterySim && !kidMode;
     applyQuadSettings();
     if (model && aircraft instanceof Multirotor && aircraft.cfg.type === 'fpv') {
       scene.remove(model.root);
@@ -187,6 +193,7 @@ function handleActions() {
 
 function statusMessage(inp: ControlInputs): [string, 'info' | 'warn' | 'bad'] {
   if (paused && !menu.open) return ['PAUSED — press P to continue', 'info'];
+  if (aircraft.crashed && kidMode) return ['Bonk! Back up in a moment…', 'info'];
   if (aircraft.crashed) return [`CRASHED — ${aircraft.crashReason}. Press <b>R</b> or your reset switch.`, 'bad'];
   if (aircraft.awaitingLaunch) return ['Hand launch: push throttle above 50% to throw the wing', 'info'];
   const armLive = input.hasLive('arm');
@@ -233,6 +240,16 @@ function frame(now: number) {
       n++;
     }
     if (n === 80) acc = 0;
+    if (kidMode) {
+      const b = aircraft.body;
+      const onItsBack = aircraft.kind === 'quad' && _up.set(0, 1, 0).applyQuaternion(b.quat).y < 0.3 && b.vel.length() < 1;
+      rescueT = aircraft.crashed || onItsBack ? rescueT + dt : 0;
+      if (rescueT > 1.2) {
+        rescueT = 0;
+        if (aircraft.recover(world)) { prevPos.copy(b.pos); prevQuat.copy(b.quat); acc = 0; }
+        else resetAircraft();
+      }
+    }
     if (!aircraft.crashed && !aircraft.onGround) flightTime += dt * settings.simSpeed;
   }
   const alpha = running ? acc / STEP : 1;

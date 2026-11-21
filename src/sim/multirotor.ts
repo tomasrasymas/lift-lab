@@ -92,13 +92,32 @@ export class Multirotor extends Aircraft {
     this.holding = false;
     for (const m of this.motors) { m.n = 0; m.thrust = 0; }
     this.placeOnGround(world, world.layout.pad.x, world.layout.pad.z, 0);
-    this.armOnSpawn = !!opts.inAir;
+    this.armOnSpawn = !!opts.inAir || !!opts.easyArm;
     if (opts.inAir) {
       this.body.pos.y += 12;
       this.armed = true;
       const hoverN = Math.sqrt(this.cfg.mass * G / (4 * this.cfg.motorThrust));
       for (const m of this.motors) m.n = hoverN;
     }
+  }
+
+  recover(world: World) {
+    const b = this.body;
+    const { x, z } = b.pos;
+    const nose = new Vector3(0, 0, -1).applyQuaternion(b.quat);
+    const yaw = Math.atan2(-nose.x, -nose.z);
+    this.baseReset();
+    this.armed = false;
+    this.iRate.set(0, 0, 0);
+    this.iVel.set(0, 0, 0);
+    this.iVz = 0;
+    this.holding = false;
+    for (const m of this.motors) { m.n = 0; m.thrust = 0; }
+    this.placeOnGround(world, x, z, yaw);
+    // on the ground under a cupcake or inside the gingerbread house is no place to restart from
+    if (world.collide(b.pos, 0.2, this.hit)) return false;
+    this.armOnSpawn = true;
+    return true;
   }
 
   protected stepForces(dt: number, input: ControlInputs, world: World) {

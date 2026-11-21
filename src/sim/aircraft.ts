@@ -49,7 +49,11 @@ export interface Telemetry {
   impact: number;      // last impact speed (for sound), reset by the consumer
 }
 
-export interface SpawnOptions { inAir: boolean; }
+export interface SpawnOptions {
+  inAir: boolean;
+  /** Kids' map: arm as soon as the arm switch is on, without having to lower the throttle first. */
+  easyArm?: boolean;
+}
 
 export abstract class Aircraft {
   body: RigidBody;
@@ -68,7 +72,7 @@ export abstract class Aircraft {
     buffet: 0, cellV: 4.2, batteryPct: 100, usedMah: 0, cells: 0, impact: 0,
   };
   battery?: Battery;
-  private hit: Hit = { kind: 'tree', normal: new Vector3(), depth: 0, soft: false };
+  protected hit: Hit = { kind: 'tree', normal: new Vector3(), depth: 0, soft: false };
   private stuck = false;
 
   protected _tmpA = new Vector3();
@@ -83,6 +87,11 @@ export abstract class Aircraft {
   }
 
   abstract reset(world: World, opts: SpawnOptions): void;
+  /**
+   * Kids' map: stand the aircraft back up where it is, ready to fly. Returns false when that is not
+   * possible here, and the caller should do a full reset instead.
+   */
+  recover(_world: World): boolean { return false; }
   protected abstract stepForces(dt: number, input: ControlInputs, world: World): void;
 
   /** Lowest contact point below CG when level (for spawn height). */
