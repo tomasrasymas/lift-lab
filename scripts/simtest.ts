@@ -5,7 +5,7 @@ import { createAircraft, AircraftId } from '../src/sim/presets';
 import { neutralInputs, ControlInputs } from '../src/sim/aircraft';
 
 const DT = 1 / 400;
-const mapArg = (globalThis as unknown as { process: { argv: string[] } }).process.argv[3] as 'field' | 'forest' | 'city' | 'course' | undefined;
+const mapArg = (globalThis as unknown as { process: { argv: string[] } }).process.argv[3] as 'field' | 'forest' | 'city' | 'course' | 'candy' | undefined;
 const world = new World(mapArg ?? 'field');
 world.wind.settings = { speed: 0, fromDeg: 90, gusts: 0, turbulence: 0 };
 world.wind.update(0);

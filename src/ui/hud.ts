@@ -79,6 +79,21 @@ export class Hud {
   private np = el('div', 'now-playing');
   private npTimer = 0;
 
+  private sweets = el('div', 'hud-sweets');
+  private sweetsText = '';
+
+  /** Candy land counter. */
+  setSweets(n: number, total: number) {
+    const text = n >= total ? `🎉 All ${total} sweets!` : `🍬 ${n} / ${total}`;
+    if (text === this.sweetsText) return;
+    this.sweetsText = text;
+    if (!this.sweets.parentElement) this.root.append(this.sweets);
+    this.sweets.textContent = text;
+    this.sweets.classList.remove('pop');
+    void this.sweets.offsetWidth; // restart the animation
+    this.sweets.classList.add('pop');
+  }
+
   setVisible(v: boolean) { this.root.style.display = v ? '' : 'none'; }
 
   setFpvMode(on: boolean) { this.root.classList.toggle('hud-fpv', on); }

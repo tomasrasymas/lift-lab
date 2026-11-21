@@ -7,11 +7,12 @@ import { clamp, fbm2, lerp, mulberry32, noise1, smoothstep, DEG } from './math';
 export const TERRAIN_SIZE = 6000;
 export const TERRAIN_RES = 256; // cells per side
 
-export type MapId = 'field' | 'forest' | 'city' | 'course';
+export type MapId = 'field' | 'forest' | 'city' | 'course' | 'candy';
 export const MAP_LIST: { id: MapId; label: string; desc: string }[] = [
   { id: 'field', label: 'Airfield', desc: 'RC club field: asphalt runway, mown grass, race gates, a lake. Best for learning.' },
   { id: 'forest', label: 'Forest', desc: 'Hilly forest with a grass strip in a clearing, tall pines, trails, a river ravine, rocks and fallen logs.' },
   { id: 'course', label: 'Obstacle course', desc: 'Flat practice field for quads: walls with windows that get smaller, a wall slalom, straight, bent and raised tunnels, and a dive tower.' },
+  { id: 'candy', label: 'Candy land', desc: 'For kids: a rainbow to fly under, giant donuts and candy cane arches to fly through, lollipops, walking cats and unicorns, and sweets to collect.' },
   { id: 'city', label: 'City', desc: 'Downtown towers, streets with traffic, parks and abandoned concrete buildings to fly through.' },
 ];
 
@@ -27,6 +28,22 @@ export interface Solid { min: Vector3; max: Vector3; kind: 'concrete' | 'log' | 
 export interface Road { x0: number; z0: number; x1: number; z1: number; w: number; }
 export interface Rect { x0: number; z0: number; x1: number; z1: number; }
 
+/** Candy land props. Physics boxes are built from the same numbers the renderer draws. */
+export interface CandyData {
+  lollipops: { x: number; z: number; h: number; r: number; c: number }[];
+  gumdrops: { x: number; z: number; r: number; c: number }[];
+  cupcakes: { x: number; z: number; s: number; c: number }[];
+  /** Rings to fly through along `axis`. */
+  donuts: { x: number; y: number; z: number; axis: 'x' | 'z'; R: number; r: number; c: number }[];
+  /** Candy cane arches standing on the ground, flown through along `axis`. */
+  canes: { x: number; z: number; axis: 'x' | 'z'; R: number; r: number }[];
+  /** Flown under along z. R is the inner radius, band the width of the colours. */
+  rainbow: { x: number; z: number; R: number; band: number };
+  house: { x: number; z: number; w: number; d: number; h: number };
+  /** Collectible sweets (no collision). */
+  sweets: { x: number; y: number; z: number }[];
+}
+
 export interface Layout {
   id: MapId;
   pilot: Vector3;                 // eye position of the pilot (LOS camera)
@@ -40,7 +57,8 @@ export interface Layout {
 }
 
 /** The obstacle course shares the airfield's terrain and ground layers. */
-const map3 = (m: MapId, field: number, forest: number, city: number) => (m === 'field' || m === 'course' ? field : m === 'forest' ? forest : city);
+const isField = (m: MapId) => m === 'field' || m === 'course' || m === 'candy';
+const map3 = (m: MapId, field: number, forest: number, city: number) => (isField(m) ? field : m === 'forest' ? forest : city);
 const inRect = (r: Rect | null, x: number, z: number, m = 0) => !!r && x > r.x0 - m && x < r.x1 + m && z > r.z0 - m && z < r.z1 + m;
 const rectDist = (r: Rect, x: number, z: number) => Math.hypot(Math.max(r.x0 - x, 0, x - r.x1), Math.max(r.z0 - z, 0, z - r.z1));
 
@@ -100,6 +118,7 @@ const fieldLayout = (id: MapId): Layout => ({
 const LAYOUTS: Record<MapId, Layout> = {
   field: fieldLayout('field'),
   course: fieldLayout('course'),
+  candy: fieldLayout('candy'),
   forest: {
     id: 'forest', pilot: new Vector3(0, 1.7, 24), pad: new Vector3(14, 0, 15),
     runway: { cx: 0, cz: 0, halfLength: 85, halfWidth: 9, surface: 'grass' },
@@ -114,7 +133,7 @@ const LAYOUTS: Record<MapId, Layout> = {
   },
 };
 
-const HEIGHTS: Record<MapId, (x: number, z: number) => number> = { field: fieldHeight, course: fieldHeight, forest: forestHeight, city: cityHeight };
+const HEIGHTS: Record<MapId, (x: number, z: number) => number> = { field: fieldHeight, course: fieldHeight, candy: fieldHeight, forest: forestHeight, city: cityHeight };
 
 /* ------------------------------------------------------------------ */
 /*  Heightfield                                                        */
@@ -260,6 +279,7 @@ export class World {
   roads: Road[] = [];
   bushes: { x: number; z: number; s: number }[] = [];
   trails: { x: number; z: number }[][] = [];
+  candy?: CandyData;
   parks: Rect[] = [];
   parking: Rect[] = [];
   time = 0;
@@ -273,7 +293,7 @@ export class World {
   constructor(readonly map: MapId = 'field', treeLimit = 9500) {
     this.layout = LAYOUTS[map];
     this.terrain = new Terrain(this.layout, HEIGHTS[map]);
-    if (map === 'field' || map === 'course') this.buildField(map === 'course');
+    if (isField(map)) this.buildField();
     else if (map === 'forest') this.buildForest();
     else this.buildCity();
     if (this.trees.length > treeLimit) {
@@ -291,7 +311,7 @@ export class World {
     const t = this.terrain, L = this.layout, r = L.runway;
     t.pad = { x: L.pad.x, z: L.pad.z, r: 1.75, h: map3(this.map, 0.025, 0.025, 0.1) };
     if (L.mown) t.layers.push({ r: L.mown, h: this.map === 'city' ? 0.093 : 0.01 });
-    if (this.map === 'field' || this.map === 'course') t.layers.push({ r: { x0: r.cx - r.halfLength, z0: r.cz - r.halfWidth, x1: r.cx + r.halfLength, z1: r.cz + r.halfWidth }, h: 0.02 });
+    if (isField(this.map)) t.layers.push({ r: { x0: r.cx - r.halfLength, z0: r.cz - r.halfWidth, x1: r.cx + r.halfLength, z1: r.cz + r.halfWidth }, h: 0.02 });
     if (this.map === 'city') {
       t.layers.push({ r: { x0: -CITY_EXTENT, z0: -CITY_EXTENT, x1: CITY_EXTENT, z1: CITY_EXTENT }, h: 0.03 });
       for (const rd of this.roads) t.layers.push({ r: rd, h: 0.07 });
@@ -354,7 +374,7 @@ export class World {
   }
 
   /* --------------------------- Airfield ---------------------------- */
-  private buildField(course = false) {
+  private buildField() {
     this.scatterTrees(9000, 2600, 1234, (x, z, f) => {
       if (inRect(FIELD_RECT, x, z, 35)) return 0;
       if (Math.abs(z) < 60 && Math.abs(x) < 420) return 0;
@@ -378,7 +398,8 @@ export class World {
       if (Math.abs(z) < 60 && Math.abs(x) > 200) continue;
       this.bushes.push({ x, z, s: 0.9 + rnd() * 1.6 });
     }
-    if (course) { this.buildCourse(); return; }
+    if (this.map === 'course') { this.buildCourse(); return; }
+    if (this.map === 'candy') { this.buildCandy(); return; }
     const box = (cx: number, cz: number, sx: number, sy: number, sz: number) => {
       const y = this.terrain.heightAt(cx, cz);
       this.addBox(new Vector3(cx - sx / 2, y - 1, cz - sz / 2), new Vector3(cx + sx / 2, y + sy, cz + sz / 2), 'building');
@@ -388,6 +409,104 @@ export class World {
     box(28, 48, 6, 3, 4);
     const gates: [number, number, number][] = [[40, -45, 0], [100, -70, 40], [120, -20, 100], [70, 20, 180], [-20, -35, 200], [-90, -60, 240], [-110, -10, 300]];
     for (const [x, z, yaw] of gates) this.gates.push({ x, z, yaw: yaw * DEG, w: 3, h: 2.2 });
+  }
+
+  /* -------------------------- Candy land --------------------------- */
+  /** Kids' map on the airfield's flat ground. Everything solid is a box (arcs are rows of small boxes). */
+  private buildCandy() {
+    const rnd = mulberry32(2024);
+    const gy = (x: number, z: number) => this.terrain.heightAt(x, z);
+    const c: CandyData = {
+      lollipops: [], gumdrops: [], cupcakes: [], donuts: [], canes: [], sweets: [],
+      rainbow: { x: 0, z: -72, R: 22, band: 4.8 },
+      house: { x: -75, z: 60, w: 9, d: 7, h: 4.5 },
+    };
+    this.candy = c;
+    const solid = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number) =>
+      this.addBox(new Vector3(x0, y0, z0), new Vector3(x1, y1, z1), 'wall');
+    /** Boxes along an arc in the plane across `axis`. hr = half size in that plane, ha = half size along the axis. */
+    const arc = (cx: number, cy: number, cz: number, axis: 'x' | 'z', R: number, hr: number, ha: number, a0: number, a1: number) => {
+      const n = Math.ceil((R * (a1 - a0)) / (hr * 1.4));
+      for (let i = 0; i <= n; i++) {
+        const a = a0 + ((a1 - a0) * i) / n, u = Math.cos(a) * R, y = cy + Math.sin(a) * R;
+        const x = axis === 'x' ? cx : cx + u, z = axis === 'x' ? cz + u : cz;
+        const hx = axis === 'x' ? ha : hr, hz = axis === 'x' ? hr : ha;
+        solid(x - hx, y - hr, z - hz, x + hx, y + hr, z + hz);
+      }
+    };
+
+    // ---- fixed features ----
+    const rb = c.rainbow, rm = rb.R + rb.band / 2, rg = gy(rb.x, rb.z);
+    arc(rb.x, rg, rb.z, 'z', rm, rb.band / 2, 0.5, 0, Math.PI);
+    for (const sx of [-1, 1]) solid(rb.x + sx * rm - 3.2, rg, rb.z - 2.6, rb.x + sx * rm + 3.2, rg + 3, rb.z + 2.6); // clouds at the feet
+    c.sweets.push({ x: rb.x, y: rg + 8, z: rb.z }, { x: rb.x - 10, y: rg + 14, z: rb.z }, { x: rb.x + 10, y: rg + 14, z: rb.z });
+
+    const heights = [4, 6, 5, 8, 6, 4];
+    heights.forEach((h, i) => {
+      const x = -115 + i * 22, z = -45, y = gy(x, z) + h;
+      c.donuts.push({ x, y, z, axis: 'x', R: 3.2, r: 0.8, c: i });
+      arc(x, y, z, 'x', 3.2, 0.7, 0.7, 0, Math.PI * 2);
+      c.sweets.push({ x, y, z });
+    });
+
+    for (let i = 0; i < 4; i++) {
+      const x = 20 + i * 25, z = -24, y = gy(x, z);
+      c.canes.push({ x, z, axis: 'x', R: 3.6, r: 0.35 });
+      arc(x, y, z, 'x', 3.6, 0.35, 0.35, 0, Math.PI);
+      c.sweets.push({ x, y: y + 1.6, z });
+    }
+
+    const H = c.house, hg = gy(H.x, H.z);
+    solid(H.x - H.w / 2, hg - 1, H.z - H.d / 2, H.x + H.w / 2, hg + H.h, H.z + H.d / 2);
+    solid(H.x - H.w / 3, hg + H.h, H.z - H.d / 3, H.x + H.w / 3, hg + H.h + 1.9, H.z + H.d / 3); // roof
+    c.sweets.push({ x: H.x, y: hg + H.h + 5.5, z: H.z });
+
+    // ---- scattered sweets-shop props, kept clear of the runway, the pilot and the fly-through lines ----
+    const keep: Rect[] = [
+      { x0: -135, z0: -14, x1: 135, z1: 14 },   // runway and its approaches
+      { x0: -45, z0: 8, x1: 45, z1: 48 },       // pilot station and pad
+      { x0: -32, z0: -92, x1: 32, z1: -52 },    // under the rainbow
+      { x0: -128, z0: -52, x1: 8, z1: -38 },    // donut line
+      { x0: 6, z0: -31, x1: 110, z1: -17 },     // candy cane line
+      { x0: H.x - 9, z0: H.z - 8, x1: H.x + 9, z1: H.z + 8 },
+    ];
+    const used: { x: number; z: number; r: number }[] = [];
+    const place = (r: number) => {
+      for (let k = 0; k < 60; k++) {
+        const x = (rnd() * 2 - 1) * 185, z = (rnd() * 2 - 1) * 100;
+        if (keep.some((q) => inRect(q, x, z, r)) || used.some((u) => Math.hypot(u.x - x, u.z - z) < u.r + r)) continue;
+        used.push({ x, z, r });
+        return { x, z };
+      }
+      return null;
+    };
+    for (let i = 0; i < 6; i++) {
+      const s = 1.8 + rnd() * 1.2, p = place(s + 2.5);
+      if (!p) continue;
+      const y = gy(p.x, p.z);
+      c.cupcakes.push({ ...p, s, c: i });
+      solid(p.x - 0.75 * s, y - 1, p.z - 0.75 * s, p.x + 0.75 * s, y + 2.1 * s, p.z + 0.75 * s);
+      c.sweets.push({ x: p.x, y: y + 2.3 * s + 2.8, z: p.z });
+    }
+    for (let i = 0; i < 44; i++) {
+      const r = 1.4 + rnd() * 1.4, h = 6 + rnd() * 8, p = place(r + 2);
+      if (!p) continue;
+      const y = gy(p.x, p.z), hy = y + h + r * 0.7, b = r * 0.72;
+      c.lollipops.push({ ...p, h, r, c: i });
+      solid(p.x - 0.2, y - 1, p.z - 0.2, p.x + 0.2, y + h, p.z + 0.2);
+      solid(p.x - b, hy - b, p.z - b, p.x + b, hy + b, p.z + b);
+    }
+    for (let i = 0; i < 36; i++) {
+      const r = 0.9 + rnd() * 1.5, p = place(r + 1);
+      if (!p) continue;
+      const y = gy(p.x, p.z);
+      c.gumdrops.push({ ...p, r, c: i });
+      solid(p.x - 0.7 * r, y - 1, p.z - 0.7 * r, p.x + 0.7 * r, y + 1.05 * r, p.z + 0.7 * r);
+    }
+    for (let i = 0; i < 8; i++) {
+      const p = place(3);
+      if (p) c.sweets.push({ x: p.x, y: gy(p.x, p.z) + 3 + rnd() * 8, z: p.z });
+    }
   }
 
   /* ------------------------ Obstacle course ------------------------ */

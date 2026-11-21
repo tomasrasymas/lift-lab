@@ -54,7 +54,7 @@ const fpvfx = new FpvEffect(q === 'low' ? 0 : 4);
 let linkQ = 1, linkTimer = 0;
 const _hit = { kind: 'tree' as const, normal: new THREE.Vector3(), depth: 0, soft: false };
 const _eul = new THREE.Euler();
-audio.ambience = settings.map === 'course' ? 'field' : settings.map;
+audio.ambience = settings.map === 'course' || settings.map === 'candy' ? 'field' : settings.map;
 audio.onTrack = (name) => { hud.showTrack(name); setTrackLabel(name); };
 
 // blob shadow (used when real shadows are off)
@@ -258,6 +258,11 @@ function frame(now: number) {
     linkQ += (target - linkQ) * 0.5;
   }
   scenery.update(dt, rig.camera.position, renderPos, world.time);
+  const candy = scenery.candy;
+  if (candy) {
+    if (candy.justCollected) { audio.chime(candy.collected === candy.total); candy.justCollected = 0; }
+    hud.setSweets(candy.collected, candy.total);
+  }
 
   if (blob.visible) {
     const gh = world.terrain.surfaceHeight(renderPos.x, renderPos.z);

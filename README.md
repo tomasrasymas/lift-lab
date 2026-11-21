@@ -50,6 +50,7 @@ A switch channel only becomes active the first time it reaches an end position, 
 Change the location in **Menu → Fly → Location**.
 
 - **Airfield:** RC club field with an asphalt runway, mown grass, race gates and a lake.
+- **Candy land:** a kids' location on the airfield's flat ground: a rainbow to fly under, giant donuts and candy cane arches to fly through, lollipops, gumdrops, cupcakes, a gingerbread house, walking cats and unicorns (two of them fly), and floating sweets to collect with a counter.
 - **Obstacle course:** the airfield's flat ground with practice obstacles for quads: walls with windows that get smaller, a wall slalom, a dive tower, and straight, bent and raised tunnels.
 - **Forest:** hills with dense pines and broadleaf trees, a grass strip in a clearing, dirt trails, a river ravine, boulders, fallen logs and a wooden hunting tower.
 - **City:** about 1.4 km of street grid:

@@ -161,6 +161,25 @@ export class SoundSystem {
     this.music?.setVolume(this.volumes.music);
   }
 
+  /** Short bell for a collected sweet; a longer run of notes when the last one is taken. */
+  chime(big = false) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    (big ? [523, 659, 784, 1047, 1319] : [880, 1319]).forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      const s = t + i * 0.09;
+      o.type = 'sine';
+      o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, s);
+      g.gain.linearRampToValueAtTime(0.22, s + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.001, s + 0.5);
+      o.connect(g).connect(this.sfx);
+      o.start(s);
+      o.stop(s + 0.55);
+    });
+  }
+
   setMusic(on: boolean) {
     this.musicEnabled = on;
     this.music?.setEnabled(on);

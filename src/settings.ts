@@ -92,7 +92,7 @@ export function loadSettings(): Settings {
     if (!raw) return d;
     const s = JSON.parse(raw);
     if (!['trainer', 'fpv'].includes(s.aircraft)) s.aircraft = 'trainer';
-    if (!['field', 'forest', 'city', 'course'].includes(s.map)) s.map = 'field';
+    if (!['field', 'forest', 'city', 'course', 'candy'].includes(s.map)) s.map = 'field';
     return { ...d, ...s, view: { ...d.view, ...(s.view ?? {}) }, wind: { ...d.wind, ...(s.wind ?? {}) }, fpvRates: { ...d.fpvRates, ...(s.fpvRates ?? {}) } };
   } catch {
     return d;

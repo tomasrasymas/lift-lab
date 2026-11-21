@@ -7,6 +7,7 @@ import type { Quality } from '../settings';
 import * as T from './textures';
 import { Trees, Grass } from './vegetation';
 import { CityRenderer, StaticShadow, decal } from './city';
+import { CandyLand } from './candy';
 
 export const SUN_DIR = new THREE.Vector3(0.38, 0.62, 0.69).normalize();
 // light-space axes matching the shadow camera's lookAt basis (up = +Y)
@@ -28,6 +29,7 @@ export class Scenery {
   private snapped = new THREE.Vector3();
   private trees!: Trees;
   city?: CityRenderer;
+  candy?: CandyLand;
   envMap!: THREE.Texture;
   private grass!: Grass;
 
@@ -101,6 +103,11 @@ export class Scenery {
     this.buildMown();
     if (map === 'field') { this.buildRunwayProps(); this.buildStructures(); this.buildGates(); }
     if (map === 'course') { this.buildRunwayProps(); this.buildCourse(); }
+    if (map === 'candy') {
+      this.buildRunwayProps();
+      this.candy = new CandyLand(world, quality);
+      s.add(this.candy.group);
+    }
     if (map === 'forest') { this.buildTrails(); this.buildForestProps(); this.buildFarmhouses(); }
     this.buildPad();
     this.buildClouds();
@@ -560,6 +567,7 @@ export class Scenery {
     this.sky.position.copy(cameraPos);
     this.trees.update(time);
     this.city?.update(dt);
+    this.candy?.update(dt, time, focus);
     this.grass.update(time, cameraPos, this.world.terrain.heightAt(cameraPos.x, cameraPos.z));
     const su = this.sky.material.uniforms;
     if (su.time) su.time.value = time;
